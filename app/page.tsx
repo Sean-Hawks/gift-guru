@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type ApiRecommendation = {
   title: string;
@@ -15,7 +16,7 @@ type ApiCard = {
 };
 
 type RecommendResponse = {
-  ok: boolean;
+  ok: boolean
   received: any;
   tags: string[];
   recommendations: ApiRecommendation[];
@@ -29,6 +30,7 @@ type Relation = "同學" | "朋友" | "曖昧/交往" | "家人" | "同事" | "�
 type Occasion = "生日" | "聖誕節" | "交換禮物" | "畢業" | "情人節" | "新年" | "其他";
 
 export default function Page() {
+  const router = useRouter();
   const [relation, setRelation] = useState<Relation>("朋友");
   const [occasion, setOccasion] = useState<Occasion>("生日");
   const [budget, setBudget] = useState<number>(800);
@@ -79,10 +81,16 @@ export default function Page() {
 
     const data = (await res.json()) as RecommendResponse;
     console.log("📦 Received data:", data);
-    console.log("📦 Setting result state with:", data);
-    setResult(data); // result state：拿來渲染 tags/ideas/card
+
+    // 轉成 Base64（支援中文）
+    const json = JSON.stringify(data);
+    const bytes = new TextEncoder().encode(json);
+    let bin = "";
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    const b64 = btoa(bin);
+
+    router.push(`/result?data=${encodeURIComponent(b64)}`);
     setIsLoading(false);
-    console.log("✅ Loading set to false");
   }
 
   return (
