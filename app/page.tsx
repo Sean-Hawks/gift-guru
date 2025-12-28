@@ -2,25 +2,27 @@
 
 import React, { useMemo, useState } from "react";
 
-type GiftIdea = {
+type ApiRecommendation = {
   title: string;
   reason: string;
   priceRange: string;
-  tags: string[];
+};
+
+type ApiCard = {
+  title: string;
+  message: string;
+  signature: string;
 };
 
 type RecommendResponse = {
-  profileTags: string[];
-  styleRadar: {
-    practical: number;
-    romantic: number;
-    trendy: number;
-    cute: number;
-    minimal: number;
-  };
-  gifts: GiftIdea[];
-  card: { short: string; long: string };
+  ok: boolean;
+  received: any;
+  tags: string[];
+  recommendations: ApiRecommendation[];
+  card: ApiCard;
+  shareCaption: string;
 };
+
 
 
 type Relation = "同學" | "朋友" | "曖昧/交往" | "家人" | "同事" | "老師/學長姐" | "其他";
@@ -37,11 +39,51 @@ export default function Page() {
   const [socialPicked, setSocialPicked] = useState<string>("");
 
   const [files, setFiles] = useState<File[]>([]);
+  const [result, setResult] = useState<RecommendResponse | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // 調試：暴露到全局
+  React.useEffect(() => {
+    (window as any).__result = result;
+    console.log("🔄 Result updated in effect:", result);
+  }, [result]);
 
   const budgetText = useMemo(() => {
     if (!Number.isFinite(budget) || budget <= 0) return "—";
     return `NT$ ${budget.toLocaleString("en-US")}`;
   }, [budget]);
+
+  async function generate() {
+    console.log("🎯 generate() called, setting loading=true");
+    setIsLoading(true);
+    const payload = {
+      relationship: relation,
+      occasion,
+      budget: Number(budget),
+      interests,
+      impression,
+    };
+
+    const res = await fetch("/api/recommand", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert((err as any)?.error ?? "API error");
+      setIsLoading(false);
+      return;
+    }
+
+    const data = (await res.json()) as RecommendResponse;
+    console.log("📦 Received data:", data);
+    console.log("📦 Setting result state with:", data);
+    setResult(data); // result state：拿來渲染 tags/ideas/card
+    setIsLoading(false);
+    console.log("✅ Loading set to false");
+  }
 
   return (
     <main className="min-h-screen w-full bg-[#c9cfac] px-4 py-8 md:py-12">
@@ -217,13 +259,11 @@ export default function Page() {
             {/* 生成按鈕 */}
             <button
               type="button"
-              onClick={() => {
-                // TODO: 接上 API
-                alert("開始分析中...");
-              }}
-              className="mt-2 w-full rounded-2xl border-2 border-black bg-[#f2b7c4] px-6 py-4 text-lg font-black shadow-[0_8px_0_rgba(0,0,0,0.18)] active:translate-y-[2px] active:shadow-[0_6px_0_rgba(0,0,0,0.18)]"
+              onClick={generate}
+              className="mt-2 w-full rounded-2xl border-2 border-black bg-[#f2b7c4] px-6 py-4 text-lg font-black shadow-[0_8px_0_rgba(0,0,0,0.18)] active:translate-y-[2px] active:shadow-[0_6px_0_rgba(0,0,0,0.18)] disabled:opacity-60"
+              disabled={isLoading}
             >
-              開始推薦禮物
+              {isLoading ? "分析中…" : "開始推薦禮物"}
             </button>
           </div>
 
@@ -256,6 +296,42 @@ export default function Page() {
             </div>
           </div>
         </div>
+        {/* 結果區塊 */}
+        {result && (
+          <section className="mx-auto mt-8 w-full max-w-6xl rounded-3xl border-4 border-red-500 bg-yellow-100 p-6 shadow-[0_10px_0_rgba(0,0,0,0.15)]">
+            <h3 className="mb-4 text-2xl font-black text-red-600">🎉 推薦結果</h3>
+            <div className="mb-4">
+              <div className="text-sm font-bold">標籤：</div>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {result.tags && result.tags.map((t) => (
+                  <span key={t} className="rounded-lg border-2 border-black bg-[#f2cd9a] px-3 py-1 text-sm font-semibold">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <div className="text-sm font-bold">推薦禮物：</div>
+              <ul className="mt-2 space-y-2">
+                {result.recommendations && result.recommendations.map((r) => (
+                  <li key={r.title} className="rounded-xl border-2 border-black bg-[#f6efd2] p-3">
+                    <div className="font-black">{r.title}</div>
+                    <div className="text-sm">{r.reason}</div>
+                    <div className="text-xs text-black/70">{r.priceRange}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-sm font-bold">卡片：</div>
+              <div className="mt-2 rounded-xl border-2 border-black bg-[#f6efd2] p-3">
+                <div className="font-black">{result.card?.title}</div>
+                <pre className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{result.card?.message}</pre>
+                <div className="mt-2 text-right text-sm font-semibold">— {result.card?.signature}</div>
+              </div>
+            </div>
+          </section>
+        )}
       </section>
     </main>
   );
@@ -271,3 +347,5 @@ function CardBox({ title, children }: { title: string; children: React.ReactNode
     </div>
   );
 }
+
+
